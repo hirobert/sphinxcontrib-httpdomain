@@ -45,11 +45,34 @@ def translate_werkzeug_rule(rule):
 
 
 def get_routes(app):
+    route_json = {}
     for rule in app.url_map.iter_rules():
         methods = rule.methods.difference(['OPTIONS', 'HEAD'])
         for method in methods:
             path = translate_werkzeug_rule(rule.rule)
-            yield method, path, rule.endpoint
+            #collects route data for deduplication
+            if route_json and rule.endpoint in route_json:
+                if method in route_json[rule.endpoint]:
+                    if path.lower() in route_json[rule.endpoint][method]:
+                            route_json[rule.endpoint][method][path.lower()] = path.lower()
+                    else:
+                        route_json[rule.endpoint][method][path.lower()] = path
+                else:
+                    route_json[rule.endpoint][method] = {
+                        path.lower(): path
+                    }
+            else:
+                route_json[rule.endpoint] = {
+                    method: {
+                        path.lower(): path
+                    }
+                }
+    #deduplicate routes
+    for endpoint in route_json:
+        for method in route_json[endpoint]:
+            for lower_path in route_json[endpoint][method]:
+                path = route_json[endpoint][method][lower_path]
+                yield method, path, endpoint
 
 
 class AutoflaskDirective(Directive):
