@@ -55,7 +55,12 @@ def get_routes(app, deduplicate=False):
                 if route_json and rule.endpoint in route_json:
                     if method in route_json[rule.endpoint]:
                         if path.lower() in route_json[rule.endpoint][method]:
-                                route_json[rule.endpoint][method][path.lower()] = path.lower()
+                                og_path = route_json[rule.endpoint][method][path.lower()]
+                                if path == og_path:
+                                    route_json[rule.endpoint][method][path.lower()] = path
+                                else:
+                                    route_json[rule.endpoint][method][path.lower()] = path.lower()
+
                         else:
                             route_json[rule.endpoint][method][path.lower()] = path
                     else:
