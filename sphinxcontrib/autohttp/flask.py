@@ -44,35 +44,39 @@ def translate_werkzeug_rule(rule):
     return buf.getvalue()
 
 
-def get_routes(app):
+def get_routes(app, deduplicate=False):
     route_json = {}
     for rule in app.url_map.iter_rules():
         methods = rule.methods.difference(['OPTIONS', 'HEAD'])
         for method in methods:
             path = translate_werkzeug_rule(rule.rule)
-            #collects route data for deduplication
-            if route_json and rule.endpoint in route_json:
-                if method in route_json[rule.endpoint]:
-                    if path.lower() in route_json[rule.endpoint][method]:
-                            route_json[rule.endpoint][method][path.lower()] = path.lower()
-                    else:
-                        route_json[rule.endpoint][method][path.lower()] = path
-                else:
-                    route_json[rule.endpoint][method] = {
-                        path.lower(): path
-                    }
+            if not deduplicate:
+                yield method, path, rule.endpoint
             else:
-                route_json[rule.endpoint] = {
-                    method: {
-                        path.lower(): path
+                #collects route data for deduplication
+                if route_json and rule.endpoint in route_json:
+                    if method in route_json[rule.endpoint]:
+                        if path.lower() in route_json[rule.endpoint][method]:
+                                route_json[rule.endpoint][method][path.lower()] = path.lower()
+                        else:
+                            route_json[rule.endpoint][method][path.lower()] = path
+                    else:
+                        route_json[rule.endpoint][method] = {
+                            path.lower(): path
+                        }
+                else:
+                    route_json[rule.endpoint] = {
+                        method: {
+                            path.lower(): path
+                        }
                     }
-                }
-    #deduplicate routes
-    for endpoint in route_json:
-        for method in route_json[endpoint]:
-            for lower_path in route_json[endpoint][method]:
-                path = route_json[endpoint][method][lower_path]
-                yield method, path, endpoint
+    if deduplicate:
+        #deduplicate routes
+        for endpoint in route_json:
+            for method in route_json[endpoint]:
+                for lower_path in route_json[endpoint][method]:
+                    path = route_json[endpoint][method][lower_path]
+                    yield method, path, endpoint
 
 
 class AutoflaskDirective(Directive):
@@ -84,7 +88,8 @@ class AutoflaskDirective(Directive):
                    'undoc-endpoints': directives.unchanged,
                    'undoc-blueprints': directives.unchanged,
                    'undoc-static': directives.unchanged,
-                   'include-empty-docstring': directives.unchanged}
+                   'include-empty-docstring': directives.unchanged,
+                   'deduplicate-routes': directives.unchanged}
 
     @property
     def endpoints(self):
@@ -116,7 +121,8 @@ class AutoflaskDirective(Directive):
 
     def make_rst(self):
         app = import_object(self.arguments[0])
-        for method, path, endpoint in get_routes(app):
+        deduplicate_routes = True if 'deduplicate-routes' in self.options else False
+        for method, path, endpoint in get_routes(app, deduplicate_routes):
             try:
                 blueprint, endpoint_internal = endpoint.split('.')
                 if self.blueprints and blueprint not in self.blueprints:
