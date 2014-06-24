@@ -50,9 +50,7 @@ def get_routes(app, deduplicate=False):
         methods = rule.methods.difference(['OPTIONS', 'HEAD'])
         for method in methods:
             path = translate_werkzeug_rule(rule.rule)
-            if not deduplicate:
-                yield method, path, rule.endpoint
-            else:
+            if deduplicate:
                 #collects route data for deduplication
                 if route_json and rule.endpoint in route_json:
                     if method in route_json[rule.endpoint]:
@@ -70,6 +68,9 @@ def get_routes(app, deduplicate=False):
                             path.lower(): path
                         }
                     }
+            else:
+                yield method, path, rule.endpoint
+                
     if deduplicate:
         #deduplicate routes
         for endpoint in route_json:
